@@ -46,14 +46,19 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
 uint32_t QEIRead;
 uint32_t AngularPositon;
 uint32_t SetPoint = 360;
-uint32_t error;
-uint32_t dutyCycle;
-float Kp = 1.0;
-float Ki = 0.1;
-float Kd = 0.1;
+int32_t error;
+uint32_t sumerror = 0;
+uint32_t differror;
+uint16_t dutyCycle;
+int32_t u;
+int flag = 0;
+float Kp = 0;
+float Ki = 0;
+float Kd = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,7 +68,9 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-
+void MotorForward(uint32_t duty);
+void MotorBackward(uint32_t duty);
+void MotorStop();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -124,8 +131,30 @@ int main(void)
 		  QEIRead  = __HAL_TIM_GET_COUNTER(&htim2);
 		  AngularPositon = QEIRead * 360/3072;
 		  error = SetPoint - AngularPositon;
-		  dutyCycle = Kp * error;
-		  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, dutyCycle);
+
+		  u = Kp * error + Ki * sumerror + Kd * differror;
+		  sumerror += error*0.1;
+
+		  dutyCycle = abs(u) + 100;
+		  if (error >= 0)
+		  {
+			  flag = 1;
+			  if(abs(dutyCycle) > 1000)
+			  {
+				  dutyCycle = 1000;
+			  }
+			  MotorForward(abs(dutyCycle));
+		  }
+		  else if (error <  0)
+		  {
+			  flag = -1;
+			  if(abs(dutyCycle) > 1000)
+			  {
+				  dutyCycle = 1000;
+			  }
+			  MotorBackward(abs(dutyCycle));
+		  }
+
 	  }
   }
   /* USER CODE END 3 */
@@ -265,7 +294,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 83;
+  htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 307200;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -366,7 +395,23 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void MotorForward(uint32_t duty)
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+}
 
+void MotorBackward(uint32_t duty)
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, duty);
+}
+
+void MotorStop()
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+}
 /* USER CODE END 4 */
 
 /**
